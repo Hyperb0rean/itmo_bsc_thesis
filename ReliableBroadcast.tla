@@ -7,10 +7,10 @@ CONSTANTS nodes, \* Set of all nodes participating in communication
 VARIABLES discovery, \*  specifies which nodes could communicate
           sessions, \*  specifies which nodes could send messages
           msgs, \* specifies messages in flight
-          nodesState
+          chanState
 
-nvars == << discovery, sessions, msgs >>
-vars == << discovery, sessions, msgs, nodesState >>
+nvars == << chanState >>
+vars == << discovery, sessions, msgs, chanState >>
 
 Network == INSTANCE MeshNetwork
 
@@ -18,7 +18,8 @@ TypeOK == Network!TypeOK
 
 Init == 
     /\ Network!Init
-    /\ nodesState = [n \in nodes \X nodes  |-> "closed"]
+    /\ chanState = [n \in nodes \X nodes  |-> [state |-> "closed",
+                                                lmsg |-> {}]]
 
 OpenSession(n, k) ==
     /\ n # k
@@ -26,7 +27,7 @@ OpenSession(n, k) ==
     /\ ~(n \in sessions[k])
     /\ k \in discovery[n] \* other could not be true
     /\ sessions' = [[sessions EXCEPT ![n] = @ \cup {k}] EXCEPT ![k] = @ \cup {n}] 
-    /\ nodesState' = [[nodesState EXCEPT ![<<n, k>>] = "opened"] EXCEPT ![<<k, n>>] = "opened"]
+    /\ chanState' = [[chanState EXCEPT ![<<n, k>>].state = "opened"] EXCEPT ![<<k, n>>].state = "opened"]
     /\ UNCHANGED <<discovery, msgs>>
 
 CloseSession(n, k) ==
@@ -34,20 +35,27 @@ CloseSession(n, k) ==
     /\ k \in sessions[n]
     /\ n \in sessions[k]
     /\ sessions' = [[sessions EXCEPT ![n] = @ \ {k}] EXCEPT ![k] = @ \ {n}] 
-    /\ nodesState' = [[nodesState EXCEPT ![<<n, k>>] = "closed"] EXCEPT ![<<k, n>>] = "closed"]
+    /\ chanState' = [[chanState EXCEPT ![<<n, k>>].state = "closed"] EXCEPT ![<<k, n>>].state = "closed"]
     /\ UNCHANGED <<discovery, msgs>>
 
 Send(n, k, msg) ==
-    /\ nodesState[<<n, k>>] = "opened"
+    /\ chanState[<<n, k>>].state = "opened"
     /\ msgs' = [msgs EXCEPT ![<<n, k>>] = Append(@, msg)]
-    /\ nodesState' = [nodesState EXCEPT ![<<n, k>>] = "sent"]
+    /\ chanState' = [chanState EXCEPT ![<<n, k>>].state = "sent"]
+    /\ UNCHANGED <<discovery, sessions>>
+
+Deliver(n, k) ==
+    /\ chanState[<<k, n>>].state = "sent"
+    /\ chanState' = [[chanState EXCEPT ![<<k, n>>].state = "opened"] EXCEPT ![<<n, k>>].lmsg = Head(msgs[<<k, n>>])] 
+    /\ msgs' = [msgs EXCEPT ![<<k, n>>] = Tail(@)]
     /\ UNCHANGED <<discovery, sessions>>
 
 Next == 
-    \/ Network!Next /\ UNCHANGED nodesState
+    \/ Network!Next /\ UNCHANGED nvars
     \/ \E n, k \in nodes: OpenSession(n, k)
-    \/ \E n, k \in nodes: CloseSession(n, k)
+    \* \/ \E n, k \in nodes: CloseSession(n, k)
     \/ \E n, k \in nodes: \E msg \in data: Send(n, k, msg)
+    \/ \E n, k \in nodes: \E msg \in data: Deliver(n, k)
     \/ UNCHANGED vars
 
 
