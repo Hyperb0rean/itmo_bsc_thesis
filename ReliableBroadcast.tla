@@ -14,11 +14,17 @@ vars == << discovery, sessions, msgs, chanState >>
 
 Network == INSTANCE MeshNetwork
 
-TypeOK == Network!TypeOK
+TypeOK ==
+    /\ Network!TypeOK
+    \* /\ \A seq \in msgs:  Check all msgs
+    /\ \A s \in DOMAIN chanState: LET st == chanState[s] IN
+        /\ st.state \in {"closed", "opened", "sent"}
+        /\ st.lmsg \subseteq data
+        
 
 Init == 
     /\ Network!Init
-    /\ chanState = [n \in nodes \X nodes  |-> [state |-> "closed",
+    /\ chanState = [n \in (nodes \X nodes)  |-> [state |-> "closed",
                                                 lmsg |-> {}]]
 
 OpenSession(n, k) ==
@@ -46,7 +52,7 @@ Send(n, k, msg) ==
 
 Deliver(n, k) ==
     /\ chanState[<<k, n>>].state = "sent"
-    /\ chanState' = [[chanState EXCEPT ![<<k, n>>].state = "opened"] EXCEPT ![<<n, k>>].lmsg = Head(msgs[<<k, n>>])] 
+    /\ chanState' = [[chanState EXCEPT ![<<k, n>>].state = "opened"] EXCEPT ![<<n, k>>].lmsg = {Head(msgs[<<k, n>>])}] 
     /\ msgs' = [msgs EXCEPT ![<<k, n>>] = Tail(@)]
     /\ UNCHANGED <<discovery, sessions>>
 
