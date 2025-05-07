@@ -9,10 +9,19 @@ VARIABLES discovery, \*  specifies which nodes could communicate
 
 vars == << discovery, sessions, msgs >>
 
+TypeOK == 
+    /\ \A n \in nodes: discovery[n] \subseteq nodes \ {n} \* Nodes should not discover themselves
+    /\ \A n \in nodes: sessions[n] \subseteq nodes \*  Nodes should not connect to themselves
+    (****************************************************)
+    (* Not just subset of discovery *)
+    (* because it is possible to have session but not have discovery *)
+    (****************************************************)
+
+
 Init == 
     /\ discovery = [n \in nodes |-> {}]
     /\ sessions = [n \in nodes |-> {}]
-    /\ msgs = [from \in nodes |-> [to \in nodes |-> <<>>]]
+    /\ msgs = [from \in nodes \X nodes |-> <<>>]
 
 
 NewPeer == 
