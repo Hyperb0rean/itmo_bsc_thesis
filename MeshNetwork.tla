@@ -56,4 +56,6 @@ Next ==
 
 Spec == Init /\ [] [Next]_vars
 
+Symmetry == Permutations(nodes)
+
 ====

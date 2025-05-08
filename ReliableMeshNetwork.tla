@@ -1,11 +1,10 @@
----- MODULE ReliableBroadcast ----
-EXTENDS TLC, Sequences, SequencesExt
+---- MODULE ReliableMeshNetwork ----
+EXTENDS TLC, Sequences
 
-CONSTANTS nodes, \* Set of all nodes participating in communication
-          data \* data to send
+CONSTANTS nodes \* Set of all nodes participating in communication
 
-VARIABLES discovery, \*  specifies which nodes could communicate
-          sessions, \*  specifies which nodes could send messages
+VARIABLES discovery, \*
+          sessions, \*  from MeshNetwork
           msgs, \* specifies messages in flight
           chanState
 
@@ -16,10 +15,8 @@ Network == INSTANCE MeshNetwork
 
 TypeOK ==
     /\ Network!TypeOK
-    /\ \A n, k \in nodes: \A msg \in ToSet(msgs[n][k]): msg \in data
     /\ \A src, dst \in nodes: LET chan == chanState[src][dst] IN
         /\ chan.state \in {"closed", "opened", "sent"}
-        /\ chan.lmsg \subseteq data
 
 Init == 
     /\ Network!Init
@@ -63,19 +60,15 @@ Broadcast(src, msg) ==
     /\ UNCHANGED <<discovery, sessions>>
 
 
-
-(*
-Next state of Reliable Broadcast is just Delivering of sent messages
-So upper layer modules should use other Actions to start communication
-*)
 Next == 
     \/ Network!Next /\ UNCHANGED nvars
-    \/ \E n, k \in nodes: OpenSession(n, k)
-    \/ \E n, k \in nodes: \E msg \in data: Deliver(n, k)
-    \/ \E n, k \in nodes: \E msg \in data: Send(n, k, msg)
+    \* \/ \E n,k \in nodes: OpenSession(n,k)
+    \* \/ \E n,k \in nodes: Deliver(n,k)
+    \* \/ \E n \in nodes: Broadcast(n, {"Hello"})
     \/ UNCHANGED vars
 
-
 Spec == Init /\ [] [Next]_vars
+
+Symmetry == Network!Symmetry
 
 ====
