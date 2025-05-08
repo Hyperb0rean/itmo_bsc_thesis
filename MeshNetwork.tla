@@ -19,7 +19,7 @@ TypeOK ==
 Init == 
     /\ discovery = [n \in nodes |-> {}]
     /\ sessions = [n \in nodes |-> {}]
-    /\ msgs = [from \in nodes \X nodes |-> <<>>]
+    /\ msgs = [from \in nodes |-> [to \in nodes |-> <<>>]]
 
 
 NewPeer == 
