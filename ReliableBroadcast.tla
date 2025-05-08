@@ -1,5 +1,5 @@
 ---- MODULE ReliableBroadcast ----
-EXTENDS TLC, Sequences
+EXTENDS TLC, Sequences, SequencesExt
 
 CONSTANTS nodes, \* Set of all nodes participating in communication
           data \* data to send
@@ -9,72 +9,70 @@ VARIABLES discovery, \*  specifies which nodes could communicate
           msgs, \* specifies messages in flight
           chanState
 
-nvars == << chanState >>
+nvars == << chanState, msgs >>
 vars == << discovery, sessions, msgs, chanState >>
 
 Network == INSTANCE MeshNetwork
 
 TypeOK ==
     /\ Network!TypeOK
-    \* /\ \A seq \in msgs:  Check all msgs
-    /\ \A from, to \in nodes: LET chan == chanState[from][to] IN
+    /\ \A n, k \in nodes: \A msg \in ToSet(msgs[n][k]): msg \in data
+    /\ \A src, dst \in nodes: LET chan == chanState[src][dst] IN
         /\ chan.state \in {"closed", "opened", "sent"}
         /\ chan.lmsg \subseteq data
 
-        
-
 Init == 
     /\ Network!Init
-    /\ chanState = [from \in nodes |-> [to \in nodes |-> 
+    /\ msgs = [src \in nodes |-> [dst \in nodes |-> <<>>]]
+    /\ chanState = [src \in nodes |-> [dst \in nodes |-> 
                                         [state |-> "closed",
                                           lmsg |-> {}] ]]
 
-OpenSession(n, k) ==
-    /\ n # k
-    /\ ~(k \in sessions[n])
-    /\ ~(n \in sessions[k])
-    /\ k \in discovery[n] \* other could not be true
-    /\ sessions' = [[sessions EXCEPT ![n] = @ \cup {k}] EXCEPT ![k] = @ \cup {n}] 
-    /\ chanState' = [[chanState EXCEPT ![n][k].state = "opened"] EXCEPT ![k][n].state = "opened"]
-    /\ UNCHANGED <<discovery, msgs>>
+OpenSession(src, dst) == 
+    /\ Network!OpenSession(src, dst)
+    /\ chanState' = [[chanState EXCEPT ![src][dst].state = "opened"] EXCEPT ![dst][src].state = "opened"]
+    /\ UNCHANGED msgs
 
-CloseSession(n, k) ==
-    /\ n # k
-    /\ k \in sessions[n]
-    /\ n \in sessions[k]
-    /\ sessions' = [[sessions EXCEPT ![n] = @ \ {k}] EXCEPT ![k] = @ \ {n}] 
-    /\ chanState' = [[chanState EXCEPT ![n][k].state = "closed"] EXCEPT ![k][n].state = "closed"]
-    /\ UNCHANGED <<discovery, msgs>>
+CloseSession(src, dst) == 
+    /\ Network!CloseSession(src, dst)
+    /\ chanState' = [[chanState EXCEPT ![src][dst].state = "closed"] EXCEPT ![dst][src].state = "closed"]
+    /\ UNCHANGED msgs
 
-Send(n, k, msg) ==
-    /\ chanState[n][k].state = "opened"
-    /\ msgs' = [msgs EXCEPT ![n][k] = Append(@, msg)]
-    /\ chanState' = [chanState EXCEPT ![n][k].state = "sent"]
+Send(src, dst, msg) ==
+    /\ chanState[src][dst].state = "opened"
+    /\ msgs' = [msgs EXCEPT ![src][dst] = Append(@, msg)]
+    /\ chanState' = [chanState EXCEPT ![src][dst].state = "sent"]
     /\ UNCHANGED <<discovery, sessions>>
 
-Deliver(n, k) ==
-    /\ chanState[k][n].state = "sent"
-    /\ chanState' = [[chanState EXCEPT ![k][n].state = "opened"] EXCEPT ![n][k].lmsg = {Head(msgs[k][n])}] 
-    /\ msgs' = [msgs EXCEPT ![k][n] = Tail(@)]
+Deliver(dst, src) ==
+    /\ chanState[src][dst].state = "sent"
+    /\ chanState' = [[chanState EXCEPT ![src][dst].state = "opened"] EXCEPT ![dst][src].lmsg = {Head(msgs[src][dst])}] 
+    /\ msgs' = [msgs EXCEPT ![src][dst] = Tail(@)]
     /\ UNCHANGED <<discovery, sessions>>
 
-Broadcast(n, msg) ==
-    /\ sessions[n] # {}
-    /\ \A k \in sessions[n]: chanState[n][k].state = "opened"
-    /\ msgs' = [msgs EXCEPT ![n] = [k \in nodes |-> IF k \in sessions[n] 
-                                                    THEN Append(msgs[n][k], msg)
-                                                    ELSE msgs[n][k]]]
-    /\ chanState' = [chanState EXCEPT ![n] = [k \in nodes |-> 
-                                                    IF k \in sessions[n] 
-                                                    THEN [chanState[n][k] EXCEPT !.state = "sent"]
-                                                    ELSE chanState[n][k]]]
+Broadcast(src, msg) ==
+    /\ sessions[src] # {}
+    /\ \A dst \in sessions[src]: chanState[src][dst].state = "opened"
+    /\ msgs' = [msgs EXCEPT ![src] = [dst \in nodes |-> IF dst \in sessions[src] 
+                                                    THEN Append(msgs[src][dst], msg)
+                                                    ELSE msgs[src][dst]]]
+    /\ chanState' = [chanState EXCEPT ![src] = [dst \in nodes |-> 
+                                                    IF dst \in sessions[src] 
+                                                    THEN [chanState[src][dst] EXCEPT !.state = "sent"]
+                                                    ELSE chanState[src][dst]]]
     /\ UNCHANGED <<discovery, sessions>>
 
+
+
+(*
+Next state of Reliable Broadcast is just Delivering of sent messages
+So upper layer modules should use other Actions to start communication
+*)
 Next == 
     \/ Network!Next /\ UNCHANGED nvars
     \/ \E n, k \in nodes: OpenSession(n, k)
-    \/ \E n \in nodes: \E msg \in data: Broadcast(n, msg)
     \/ \E n, k \in nodes: \E msg \in data: Deliver(n, k)
+    \/ \E n, k \in nodes: \E msg \in data: Send(n, k, msg)
     \/ UNCHANGED vars
 
 
