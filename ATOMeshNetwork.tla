@@ -1,7 +1,16 @@
----- MODULE ReliableMeshNetwork ----
+---- MODULE ATOMeshNetwork ----
+(*
+At-Least-Once Mesh Network 
+
+We assume reliable channel that could not loose messages
+But due to cycles in network only "at-least-once" guarantee is possible 
+*)
+
+
 EXTENDS TLC, Sequences
 
-CONSTANTS nodes \* Set of all nodes participating in communication
+CONSTANTS nodes, \* Set of all nodes participating in communication
+          states \* possible state of channel
 
 VARIABLES discovery, \*
           sessions, \*  from MeshNetwork
@@ -15,8 +24,9 @@ Network == INSTANCE MeshNetwork
 
 TypeOK ==
     /\ Network!TypeOK
+    /\ {"closed", "opened", "sent"} \subseteq states
     /\ \A src, dst \in nodes: LET chan == chanState[src][dst] IN
-        /\ chan.state \in {"closed", "opened", "sent"}
+        /\ chan.state \in states
 
 Init == 
     /\ Network!Init

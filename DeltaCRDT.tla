@@ -1,21 +1,30 @@
 ---- MODULE DeltaCRDT ----
 EXTENDS TLC
 
-CONSTANTS nodes \* Set of all nodes participating in communication
+CONSTANTS nodes, \* Set of all nodes participating in communication
+          states \* possible state of channel
+
 
 VARIABLES discovery, \*  
           sessions, \*  
           msgs, \*
-          chanState \* from ReliableBroadcast
+          chanState \* from ATOMeshNetwork
 
 
 vars == <<discovery, sessions, msgs, chanState>>
 
-Network == INSTANCE ReliableBroadcast
+Network == INSTANCE ATOMeshNetwork
 
 TypeOK == Network!TypeOK
 
 Init == Network!Init
+
+
+Advertisement(src, adv) == UNCHANGED vars
+
+Request(src, dst, req) == UNCHANGED vars
+
+Response(src, dst, resp) == UNCHANGED vars
 
 Next == Network!Next
 
