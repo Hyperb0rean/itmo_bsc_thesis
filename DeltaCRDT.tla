@@ -1,4 +1,9 @@
 ---- MODULE DeltaCRDT ----
+
+(*
+Using state CRDT because network has only "at-least-once" guarantee
+*)
+
 EXTENDS TLC
 
 CONSTANTS nodes, \* Set of all nodes participating in communication
