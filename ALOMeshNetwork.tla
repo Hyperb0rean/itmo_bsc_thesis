@@ -64,9 +64,9 @@ Broadcast(src, msg) ==
 
 Next == 
     \/ Network!Next /\ UNCHANGED nvars
-    \/ \E n,k \in nodes: OpenSession(n,k)
     \/ \E n,k \in nodes: Deliver(n,k)
-    \/ \E n \in nodes: Broadcast(n, {"Hello"})
+    \* \/ \E n,k \in nodes: OpenSession(n,k)
+    \* \/ \E n \in nodes: Broadcast(n, {"Hello"})
     \/ UNCHANGED vars
 
 Spec == Init /\ [] [Next]_vars
