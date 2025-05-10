@@ -9,8 +9,7 @@ But due to cycles in network only "at-least-once" guarantee is possible
 
 EXTENDS TLC, Sequences, Naturals, SequencesExt
 
-CONSTANTS nodes, \* Set of all nodes participating in communication
-          states \* possible state of channel
+CONSTANTS nodes \* Set of all nodes participating in communication
 
 VARIABLES discovery, \*
           sessions, \*  from MeshNetwork
@@ -28,7 +27,7 @@ TypeOK ==
 Init == 
     /\ Network!Init
     /\ msgs = [src \in nodes |-> [dst \in nodes |-> <<>>]]
-    /\ lmsg = [src \in nodes |-> [dst \in nodes |-> {}]]
+    /\ lmsg = [dst \in nodes |-> [src \in nodes |-> {}]]
 
 
 OpenSession(src, dst) == 
@@ -65,7 +64,7 @@ Broadcast(src, msg) ==
 Next == 
     \/ Network!Next /\ UNCHANGED nvars
     \/ \E n,k \in nodes: Deliver(n,k)
-    \* \/ \E n,k \in nodes: OpenSession(n,k)
+    \/ \E n,k \in nodes: OpenSession(n,k)
     \* \/ \E n \in nodes: Broadcast(n, {"Hello"})
     \/ UNCHANGED vars
 
