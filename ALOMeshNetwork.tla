@@ -1,0 +1,76 @@
+---- MODULE ALOMeshNetwork ----
+(*
+At-Least-Once Mesh Network 
+
+We assume reliable channel that could not loose messages
+But due to cycles in network only "at-least-once" guarantee is possible 
+*)
+
+
+EXTENDS TLC, Sequences, Naturals, SequencesExt
+
+CONSTANTS nodes, \* Set of all nodes participating in communication
+          states \* possible state of channel
+
+VARIABLES discovery, \*
+          sessions, \*  from MeshNetwork
+          msgs, \* msg[src][dst] -- FIFO channel between src and dst
+          lmsg
+
+nvars == << lmsg, msgs >>
+vars == << discovery, sessions, msgs, lmsg >>
+
+Network == INSTANCE MeshNetwork
+
+TypeOK ==
+    /\ Network!TypeOK
+
+Init == 
+    /\ Network!Init
+    /\ msgs = [src \in nodes |-> [dst \in nodes |-> <<>>]]
+    /\ lmsg = [src \in nodes |-> [dst \in nodes |-> {}]]
+
+
+OpenSession(src, dst) == 
+    /\ Network!OpenSession(src, dst)
+    /\ UNCHANGED nvars
+
+CloseSession(src, dst) == 
+    /\ Network!CloseSession(src, dst)
+    /\ UNCHANGED nvars
+
+Send(src, dst, msg) ==
+    /\ dst \in sessions[src]
+    /\ ~Contains(msgs[src][dst], msg) \* Deduplication for stuttering steps elimination
+    /\ msgs' = [msgs EXCEPT ![src][dst] = Append(@, msg)]
+    /\ UNCHANGED <<lmsg, discovery, sessions>>
+
+Deliver(dst, src) ==
+    /\ dst \in sessions[src]
+    /\ Len(msgs[src][dst]) = 1 \* Just for not loosing messages
+    /\ lmsg' = [lmsg EXCEPT ![dst][src] = {Head(msgs[src][dst])}]  
+    /\ msgs' = [msgs EXCEPT ![src][dst] = Tail(@)]
+    /\ UNCHANGED <<discovery, sessions>>
+
+Broadcast(src, msg) ==
+    /\ sessions[src] # {}
+    /\ msgs' = [msgs EXCEPT ![src] = 
+        [dst \in nodes |-> 
+            IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
+            THEN Append(msgs[src][dst], msg)
+            ELSE msgs[src][dst]]]
+    /\ UNCHANGED <<lmsg, discovery, sessions>>
+
+
+Next == 
+    \/ Network!Next /\ UNCHANGED nvars
+    \/ \E n,k \in nodes: OpenSession(n,k)
+    \/ \E n,k \in nodes: Deliver(n,k)
+    \/ \E n \in nodes: Broadcast(n, {"Hello"})
+    \/ UNCHANGED vars
+
+Spec == Init /\ [] [Next]_vars
+
+Symmetry == Network!Symmetry
+
+====
