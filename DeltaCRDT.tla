@@ -32,41 +32,49 @@ Init ==
                 ]]
 
 
-Join(a, b) == IF a > b THEN a ELSE b
+Join(a, b) == IF a > b 
+              THEN a 
+              ELSE b
 
-Get(local) == [n \in {k \in nodes : local[k] # {}} |-> local[n].seq]
+VectorClock(local) == [n \in nodes |-> local[n].seq]
+
+Get(local) == [n \in {k \in nodes : local[k].seq # -1} |-> local[n].seq]
 
 Prepare(local, incoming) == 
     DOMAIN [n \in {k \in DOMAIN incoming : Join(local[k], incoming[k]) # local[k]}  |-> {}]
 
-Set(local, incoming) == Prepare(Get(local), Get(incoming))
+Set(local, incoming) == Prepare(VectorClock(local), VectorClock(incoming))
 
 Update(local, value) ==
-    /\ state' = [[state EXCEPT ![local][local].state = @ + 1] 
-                        EXCEPT ![local][local].value = value]
-    /\ Network!Broadcast(local, [type |-> "ADV", body |-> Get(state)])
+    LET newState == [[state EXCEPT ![local][local].seq = @ + 1] 
+                            EXCEPT ![local][local].value = value] IN
+    /\ Network!Broadcast(local, [type |-> "ADV", body |-> Get(newState[local])])
+    /\ state' = newState
+    /\ UNCHANGED lmsg
 
-RecieveAdvertisement(dst, src) ==
-    LET req == Prepare(Get(state[dst]), lmsg[dst][src].body) IN
+RecieveAdvertisement(dst, src, msg) ==
+    LET req == Prepare(VectorClock(state[dst]), msg.body) IN
     IF req # {}
     THEN 
         /\ Network!Send(src, dst, [type |-> "REQ", body |-> req])
+        /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ msg]
         /\ UNCHANGED state
     ELSE UNCHANGED vars
 
-RecieveRequest(dst, src) ==
-    LET resp == [n \in lmsg[dst][src].body |-> state[dst][n]] IN
+RecieveRequest(dst, src, msg) ==
+    LET resp == [n \in msg.body |-> state[dst][n]] IN
     /\ Network!Send(src, dst, [type |-> "RESP", body |-> resp])
+    /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ msg]
     /\ UNCHANGED state
 
-RecieveResponse(dst, src) ==
-    LET affected == Set(state[dst], lmsg[dst][src].body) IN
+RecieveResponse(dst, src, msg) ==
+    LET affected == Set(state[dst], msg.body) IN
     IF affected # {}
     THEN 
         LET newState == [state EXCEPT ![dst] = 
         [n \in nodes |-> 
                 IF n \in affected
-                THEN lmsg[dst][src].body[n]
+                THEN msg.body[n]
                 ELSE state[dst][n]
         ]] IN
         /\ state' = newState
@@ -74,15 +82,16 @@ RecieveResponse(dst, src) ==
     ELSE UNCHANGED vars
 
 Recieve(dst, src) ==
-    CASE lmsg[dst][src].type = "ADV" -> RecieveAdvertisement(dst, src)
-      [] lmsg[dst][src].type = "REQ" -> RecieveRequest(dst, src)
-      [] lmsg[dst][src].type = "RESP"-> RecieveResponse(dst, src)
+    CHOOSE msg \in lmsg[dst][src]:
+    CASE msg.type = "ADV" -> RecieveAdvertisement(dst, src, msg)
+      [] msg.type = "REQ" -> RecieveRequest(dst, src, msg)
+      [] msg.type = "RESP"-> RecieveResponse(dst, src, msg)
       [] OTHER                  -> UNCHANGED vars
 
 Next == 
     \/ Network!Next /\ UNCHANGED state
     \/ \E n \in nodes:
-        /\ state[n][n].seq = -1
+        \* /\ state[n][n].seq = -1
         /\ Update(n, n)
     \/ \E dst, src \in nodes: 
         /\ lmsg[dst][src] # {}
@@ -90,6 +99,6 @@ Next ==
 
 Spec == Init /\ [] [Next]_vars
 
-Symmetry == Network!Symmetry
+\* Symmetry == Network!Symmetry
 
 ====

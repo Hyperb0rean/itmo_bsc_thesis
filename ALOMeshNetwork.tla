@@ -42,12 +42,12 @@ Send(src, dst, msg) ==
     /\ dst \in sessions[src]
     /\ ~Contains(msgs[src][dst], msg) \* Deduplication for stuttering steps elimination
     /\ msgs' = [msgs EXCEPT ![src][dst] = Append(@, msg)]
-    /\ UNCHANGED <<lmsg, discovery, sessions>>
+    /\ UNCHANGED <<discovery, sessions>>
 
 Deliver(dst, src) ==
     /\ dst \in sessions[src]
-    /\ Len(msgs[src][dst]) = 1 \* Just for not loosing messages
-    /\ lmsg' = [lmsg EXCEPT ![dst][src] = {Head(msgs[src][dst])}]  
+    /\ Len(msgs[src][dst]) > 0
+    /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \cup {Head(msgs[src][dst])}]  
     /\ msgs' = [msgs EXCEPT ![src][dst] = Tail(@)]
     /\ UNCHANGED <<discovery, sessions>>
 
@@ -58,7 +58,7 @@ Broadcast(src, msg) ==
             IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
             THEN Append(msgs[src][dst], msg)
             ELSE msgs[src][dst]]]
-    /\ UNCHANGED <<lmsg, discovery, sessions>>
+    /\ UNCHANGED <<discovery, sessions>>
 
 
 Next == 
