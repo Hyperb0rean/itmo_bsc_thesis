@@ -4,9 +4,11 @@
 Using CvRDT (state CRDT) because network has only "at-least-once" guarantee
 *)
 
-EXTENDS TLC, Naturals, Integers
+EXTENDS TLC, Naturals, Sequences
 
-CONSTANTS nodes \* Set of all nodes participating in communication
+CONSTANTS nodes, \* Set of all nodes participating in communication
+          values, \* Set of all valid values
+          maxSeq \* maximum sequence number of node
 
 VARIABLES discovery,\*  
           sessions, \*  
@@ -21,7 +23,27 @@ vars == <<discovery, sessions, msgs, lmsg, state>>
 
 Network == INSTANCE ALOMeshNetwork
 
-TypeOK == Network!TypeOK
+MessageTypes == {"ADV", "REQ", "RESP"}
+
+SequenceNumber == 0..maxSeq
+
+Advertisement == UNION {[type: {"ADV"}, body: [s -> SequenceNumber]]: s \in SUBSET nodes}
+
+Request == [type: {"REQ"}, body: SUBSET nodes]
+
+Response ==  UNION {[type: {"RESP"}, body: [s -> [seq: SequenceNumber, value: values]]]: s \in SUBSET nodes}
+
+Message == Advertisement \cup Request \cup Response
+
+
+TypeOK == 
+    /\ Network!TypeOK
+    /\ \A n \in nodes: \E subset \in SUBSET nodes: 
+                        state[n] \in [subset -> [seq: SequenceNumber, value: values]]
+    /\ \A src, dst \in nodes: 
+        /\ lmsg[src][dst] \subseteq Message
+        /\ \A i \in 1..Len(msgs[src][dst]): msgs[src][dst][i] \in Message
+
 
 Init == 
     /\ Network!Init
@@ -88,7 +110,7 @@ Recieve(dst, src) ==
 Next == 
     \/ Network!Next /\ UNCHANGED state
     \/ \E n \in nodes:
-        /\ state[n][n].seq = 0
+        /\ state[n][n].value # n
         /\ Update(n, n)
     \/ \E dst, src \in nodes: Recieve(dst, src)
 
