@@ -8,14 +8,14 @@ EXTENDS TLC, Naturals, Integers
 
 CONSTANTS nodes \* Set of all nodes participating in communication
 
-VARIABLES discovery, \*  
+VARIABLES discovery,\*  
           sessions, \*  
-          msgs, \*
-          lmsg, \* from ATOMeshNetwork
-          state (* state[local][n]: local, n \in nodes -- local CvRDT object 
+          msgs,     \*
+          lmsg,     \* from ALOMeshNetwork
+          state     (* state[local][n]: local, n \in nodes -- local CvRDT object 
                         .seq -- value of Vector Clock
                         .value -- any CvRDT value 
-                *)
+                    *)
 
 vars == <<discovery, sessions, msgs, lmsg, state>>
 
@@ -25,23 +25,20 @@ TypeOK == Network!TypeOK
 
 Init == 
     /\ Network!Init
-    /\ state = [local \in nodes |-> [n \in nodes |-> 
-                IF local = n
-                THEN [seq |-> 0, value |-> {}]
-                ELSE [seq |-> -1, value |-> {}] \* Sentinel for non existing nodes
-                ]]
+    /\ state = [local \in nodes |-> [l \in {local} |->  [seq |-> 0, value |-> {}]]]
 
 
 Max(a, b) == IF a > b 
               THEN a 
               ELSE b
 
-
-Get(data) == [n \in {k \in DOMAIN data : data[k].seq # -1} |-> data[n].seq]
+Get(data) == [n \in DOMAIN data |-> data[n].seq]
 
 Prepare(local, incoming) == 
-    ((DOMAIN incoming) \ (DOMAIN local)) \cup
-    DOMAIN [n \in {k \in (DOMAIN incoming \cap DOMAIN local) : Max(local[k], incoming[k]) # local[k]}  |-> {}]
+    LET new == (DOMAIN incoming) \ (DOMAIN local) IN
+    LET intersection == (DOMAIN incoming \cap DOMAIN local) IN
+    LET updated == {k \in intersection: Max(local[k], incoming[k]) # local[k]} IN
+    new \cup updated
 
 Set(local, incoming) == Prepare(Get(local), Get(incoming))
 
@@ -86,7 +83,7 @@ Recieve(dst, src) ==
         /\ CASE msg.type = "ADV" -> RecieveAdvertisement(dst, src, msg)
              [] msg.type = "REQ" -> RecieveRequest(dst, src, msg)
              [] msg.type = "RESP"-> RecieveResponse(dst, src, msg)
-             [] OTHER                  -> UNCHANGED <<discovery, sessions, state, msgs>>
+             [] OTHER            -> UNCHANGED <<discovery, sessions, state, msgs>>
 
 Next == 
     \/ Network!Next /\ UNCHANGED state
