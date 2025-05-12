@@ -51,7 +51,7 @@ CloseSession(src, dst) ==
 
 Next == 
     \/ NewPeer
-    \/ LostPeer
+    \* \/ LostPeer
     \/ UNCHANGED vars
 
 Spec == Init /\ [] [Next]_vars

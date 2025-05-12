@@ -32,18 +32,18 @@ Init ==
                 ]]
 
 
-Join(a, b) == IF a > b 
+Max(a, b) == IF a > b 
               THEN a 
               ELSE b
 
-VectorClock(local) == [n \in nodes |-> local[n].seq]
 
-Get(local) == [n \in {k \in nodes : local[k].seq # -1} |-> local[n].seq]
+Get(data) == [n \in {k \in DOMAIN data : data[k].seq # -1} |-> data[n].seq]
 
 Prepare(local, incoming) == 
-    DOMAIN [n \in {k \in DOMAIN incoming : Join(local[k], incoming[k]) # local[k]}  |-> {}]
+    ((DOMAIN incoming) \ (DOMAIN local)) \cup
+    DOMAIN [n \in {k \in (DOMAIN incoming \cap DOMAIN local) : Max(local[k], incoming[k]) # local[k]}  |-> {}]
 
-Set(local, incoming) == Prepare(VectorClock(local), VectorClock(incoming))
+Set(local, incoming) == Prepare(Get(local), Get(incoming))
 
 Update(local, value) ==
     LET newState == [[state EXCEPT ![local][local].seq = @ + 1] 
@@ -53,18 +53,16 @@ Update(local, value) ==
     /\ UNCHANGED lmsg
 
 RecieveAdvertisement(dst, src, msg) ==
-    LET req == Prepare(VectorClock(state[dst]), msg.body) IN
+    LET req == Prepare(Get(state[dst]), msg.body) IN
     IF req # {}
     THEN 
-        /\ Network!Send(src, dst, [type |-> "REQ", body |-> req])
-        /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ msg]
+        /\ Network!Send(dst, src, [type |-> "REQ", body |-> req])
         /\ UNCHANGED state
-    ELSE UNCHANGED vars
+    ELSE UNCHANGED <<discovery, sessions, state, msgs>>
 
 RecieveRequest(dst, src, msg) ==
     LET resp == [n \in msg.body |-> state[dst][n]] IN
     /\ Network!Send(src, dst, [type |-> "RESP", body |-> resp])
-    /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ msg]
     /\ UNCHANGED state
 
 RecieveResponse(dst, src, msg) ==
@@ -79,26 +77,26 @@ RecieveResponse(dst, src, msg) ==
         ]] IN
         /\ state' = newState
         /\ Network!Broadcast(dst, [type |-> "ADV", body |-> newState])
-    ELSE UNCHANGED vars
+    ELSE UNCHANGED <<discovery, sessions, state, msgs>>
 
 Recieve(dst, src) ==
-    CHOOSE msg \in lmsg[dst][src]:
-    CASE msg.type = "ADV" -> RecieveAdvertisement(dst, src, msg)
-      [] msg.type = "REQ" -> RecieveRequest(dst, src, msg)
-      [] msg.type = "RESP"-> RecieveResponse(dst, src, msg)
-      [] OTHER                  -> UNCHANGED vars
+    /\ lmsg[dst][src] # {}
+    /\ \E msg \in lmsg[dst][src]:
+        /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ {msg}]
+        /\ CASE msg.type = "ADV" -> RecieveAdvertisement(dst, src, msg)
+             [] msg.type = "REQ" -> RecieveRequest(dst, src, msg)
+             [] msg.type = "RESP"-> RecieveResponse(dst, src, msg)
+             [] OTHER                  -> UNCHANGED <<discovery, sessions, state, msgs>>
 
 Next == 
     \/ Network!Next /\ UNCHANGED state
     \/ \E n \in nodes:
-        \* /\ state[n][n].seq = -1
+        /\ state[n][n].seq = 0
         /\ Update(n, n)
-    \/ \E dst, src \in nodes: 
-        /\ lmsg[dst][src] # {}
-        /\ Recieve(dst, src)
+    \/ \E dst, src \in nodes: Recieve(dst, src)
 
 Spec == Init /\ [] [Next]_vars
 
-\* Symmetry == Network!Symmetry
+Symmetry == Network!Symmetry
 
 ====
