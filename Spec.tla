@@ -34,13 +34,14 @@ Init ==
 
 Next == 
     \E n, k \in nodes: 
+    \/  Network!Deliver(n,k)
     \/  /\ Network!NewPeer(n, k)
         /\ DiscTable!Update(n, discState[n][n].value \cup {k})
-        /\ UNCHANGED <<sessions, linkState>>
+        /\ UNCHANGED <<linkState>>
     \/  /\ Connector!Connect(n, k)
         /\ Network!OpenSession(n, k)
         /\ LinkTable!Update(n, linkState[n][n].value \cup {k})
-        /\ UNCHANGED <<sessions, discState>>
+        /\ UNCHANGED <<discState>>
     \/  /\ LinkTable!Recieve(n, k)
     \/  /\ DiscTable!Recieve(n, k)
 
@@ -48,5 +49,5 @@ Next ==
 
 Spec == Init /\ [] [Next]_vars
 
-Symmetry == Permutations(nodes)
+\* Symmetry == Permutations(nodes)
 ====

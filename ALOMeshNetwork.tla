@@ -12,7 +12,6 @@ EXTENDS TLC, MeshNetwork, Sequences, Naturals
 VARIABLES msgs, \* msg[src][dst] -- FIFO channel between src and dst
           lmsg
 
-nvars == << lmsg, msgs >>
 vars == << discovery, sessions, msgs, lmsg >>
 
 ALOTypeOK == MNTypeOK
@@ -41,12 +40,12 @@ Deliver(dst, src) ==
     /\ UNCHANGED <<discovery, sessions>>
 
 Broadcast(src, msg) ==
-    /\ sessions[src] # {}
-    /\ msgs' = [msgs EXCEPT ![src] = 
-        [dst \in nodes |-> 
-            IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
-            THEN Append(msgs[src][dst], msg)
-            ELSE msgs[src][dst]]]
-    /\ UNCHANGED <<discovery, sessions>>
+    \/  sessions[src] = {} /\ UNCHANGED msgs
+    \/  /\ msgs' = [msgs EXCEPT ![src] = 
+            [dst \in nodes |-> 
+                IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
+                THEN Append(msgs[src][dst], msg)
+                ELSE msgs[src][dst]]]
+        /\ UNCHANGED <<discovery, sessions>>
 
 ====
