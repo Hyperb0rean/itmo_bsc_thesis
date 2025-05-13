@@ -8,7 +8,6 @@ EXTENDS TLC, Naturals, Sequences
 
 CONSTANTS nodes, \* Set of all nodes participating in communication
           values, \* Set of all valid values
-          maxSeq, \* maximum sequence number of node
           ctag      \* tag for messages for concrete CvRDT object
 
 
@@ -28,24 +27,35 @@ Network == INSTANCE ALOMeshNetwork
 
 MessageTypes == {"ADV", "REQ", "RESP"}
 
-SequenceNumber == 0..maxSeq
+Advertisement(msg) == 
+    /\ msg.type = "ADV"
+    /\ DOMAIN msg.body \subseteq nodes
+    /\ \A i \in DOMAIN msg.body: msg.body[i] \in Nat
 
-Advertisement == UNION {[tag: {ctag}, type: {"ADV"}, body: [s -> SequenceNumber]]: s \in SUBSET nodes}
+Request(msg) == 
+    /\ msg.type = "REQ"
+    /\ msg.body \subseteq nodes
 
-Request == [tag: {ctag}, type: {"REQ"}, body: SUBSET nodes]
+Response(msg) == 
+    /\ msg.type = "RESP"
+    /\ DOMAIN msg.body \subseteq nodes
+    /\ \A i \in DOMAIN msg.body: 
+        /\ msg.body[i].seq \in Nat
+        /\ msg.body[i].value \in values
 
-Response ==  UNION {[tag: {ctag}, type: {"RESP"}, body: [s -> [seq: SequenceNumber, value: values]]]: s \in SUBSET nodes}
 
-Message == Advertisement \cup Request \cup Response
-
+Message(msg) == 
+    \/ Advertisement(msg)
+    \/ Request(msg)
+    \/ Response(msg)
 
 TypeOK == 
-    /\ \A f \in sync: f \in BOOLEAN 
+    /\ sync \in [nodes -> BOOLEAN]
     /\ \A n \in nodes: \E subset \in SUBSET nodes: 
-                        state[n] \in [subset -> [seq: SequenceNumber, value: values]]
+                        state[n] \in [subset -> [seq: Nat, value: values]]
     /\ \A src, dst \in nodes: 
-        /\ lmsg[src][dst] \subseteq Message
-        /\ \A i \in 1..Len(msgs[src][dst]): msgs[src][dst][i] \in Message
+        /\ \A m \in lmsg[src][dst]: Message(m) 
+        /\ \A i \in 1..Len(msgs[src][dst]): Message(msgs[src][dst][i])
 
 
 Init == 

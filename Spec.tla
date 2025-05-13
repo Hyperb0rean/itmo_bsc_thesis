@@ -3,7 +3,6 @@ EXTENDS TLC, Naturals, Sequences
 
 CONSTANTS nodes, \* Set of all nodes participating in communication
           values, \* Set of all valid values
-          maxSeq, \* maximum sequence number of node
           linkTag, \* linkState tag
           discTag \* discState tag
 
@@ -20,14 +19,21 @@ discVars == <<discSync, discState>>
 linkVars == <<linkSync, linkState>>
 vars == <<discovery, sessions, msgs, lmsg, linkVars, discVars>>
 
-LinkTable == INSTANCE DeltaCRDT WITH ctag <- linkTag, sync <- linkSync, state <- linkState
+subsets == SUBSET nodes
 
-DiscTable == INSTANCE DeltaCRDT WITH ctag <- discTag, sync <- discSync, state <- discState
+LinkTable == INSTANCE DeltaCRDT WITH values <- subsets, ctag <- linkTag, sync <- linkSync, state <- linkState
+
+DiscTable == INSTANCE DeltaCRDT WITH values <- subsets, ctag <- discTag, sync <- discSync, state <- discState
 
 Connector == INSTANCE FullConnector
 
 Network == INSTANCE ALOMeshNetwork
 
+TypeOK ==
+    /\ Network!ALOTypeOK
+    /\ LinkTable!TypeOK
+    /\ DiscTable!TypeOK
+    
 Init == 
     /\ Network!ALOInit
     /\ LinkTable!Init
@@ -89,5 +95,5 @@ Convergence == \A n,k \in nodes:
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
-\* Symmetry == Permutations(nodes)
+Symmetry == Permutations(nodes)
 ====
