@@ -88,26 +88,28 @@ RecieveAdvertisement(dst, src, msg) ==
     IF req # {}
     THEN 
         /\ Network!Send(dst, src, [tag |-> ctag, type |-> "REQ", body |-> req])
-        /\ UNCHANGED state
-    ELSE UNCHANGED <<discovery, sessions, state, msgs>>
+        /\ UNCHANGED <<state, sync>>
+    ELSE UNCHANGED <<discovery, sessions, state, sync,  msgs>>
 
 RecieveRequest(dst, src, msg) ==
     LET resp == [n \in msg.body |-> state[dst][n]] IN
-    /\ Network!Send(src, dst, [tag |-> ctag, type |-> "RESP", body |-> resp])
-    /\ UNCHANGED state
+    /\ Network!Send(dst, src, [tag |-> ctag, type |-> "RESP", body |-> resp])
+    /\ UNCHANGED <<state, sync>>
 
 RecieveResponse(dst, src, msg) ==
     LET affected == Set(state[dst], msg.body) IN
     IF affected # {}
     THEN 
         /\ state' = [state EXCEPT ![dst] = 
-                    [n \in nodes |-> 
+                    [n \in (affected \cup DOMAIN state[dst]) |-> 
                             IF n \in affected
                             THEN msg.body[n]
                             ELSE state[dst][n]
                     ]]
-        /\ Network!Broadcast(dst, [tag |-> ctag, type |-> "ADV", body |-> state'])
-    ELSE UNCHANGED <<discovery, sessions, state, msgs>>
+        /\ sync' = [sync EXCEPT ![dst] = TRUE]
+        /\ UNCHANGED <<discovery, sessions, msgs>>
+        \* /\ Network!Broadcast(dst, [tag |-> ctag, type |-> "ADV", body |-> Get(state'[dst])])
+    ELSE UNCHANGED <<discovery, sessions, state, sync, msgs>>
 
 Recieve(dst, src) ==
     /\ lmsg[dst][src] # {}

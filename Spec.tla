@@ -52,7 +52,7 @@ OpenSession(n, k) ==
     /\ Connector!Connect(n, k)
     /\ Network!OpenSession(n, k)
     /\ linkSync' = [[linkSync EXCEPT ![n] = TRUE] EXCEPT ![k] = TRUE]
-    /\ discSync' = [[discSync EXCEPT ![n] = TRUE] EXCEPT ![k] = TRUE] \* Should sync all if we have new session
+    /\ discSync' = [discSync EXCEPT ![n] = TRUE] \* Should sync all if we have new session
     /\ linkState' = [[[[linkState EXCEPT ![n][n].seq = @ + 1] 
                                     EXCEPT ![n][n].value = @ \cup {k}]
                                     EXCEPT ![k][k].seq = @ + 1]
@@ -67,9 +67,9 @@ Deliver(n,k) ==
     
 Recieve(n, k) == 
     \/  /\ DiscTable!Recieve(n, k)
-        /\ UNCHANGED <<discSync, linkVars>>
+        /\ UNCHANGED <<linkVars>>
     \/  /\ LinkTable!Recieve(n, k)
-        /\ UNCHANGED <<linkSync, discVars>>
+        /\ UNCHANGED <<discVars>>
 
 SendAdvertisement(n) ==
     \/ DiscTable!SendAdvertisement(n) /\ UNCHANGED linkVars
@@ -85,15 +85,19 @@ Next ==
 
 
 Fairness == \A n, k \in nodes: 
+            /\ WF_vars(OpenSession(n, k))
+            /\ WF_vars(NewPeer(n, k))
+            /\ WF_vars(SendAdvertisement(n))
             /\ SF_vars(Deliver(n, k))
             /\ SF_vars(Recieve(n, k))  
 
 
-Convergence == \A n,k \in nodes: 
+Convergence == <>\A n,k \in nodes: 
                            /\ linkState[n] = linkState[k]
                            /\ discState[n] = discState[k]
 
-Spec == Init /\ [][Next]_vars /\ Fairness
+
+Spec == Init /\ [][Next]_vars /\ Fairness 
 
 Symmetry == Permutations(nodes)
 ====
