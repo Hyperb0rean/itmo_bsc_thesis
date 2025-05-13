@@ -9,19 +9,20 @@ EXTENDS TLC, Naturals, Sequences
 CONSTANTS nodes, \* Set of all nodes participating in communication
           values, \* Set of all valid values
           maxSeq, \* maximum sequence number of node
-          tag      \* tag for messages for concrete CvRDT object
+          ctag      \* tag for messages for concrete CvRDT object
 
 
 VARIABLES discovery,\*  
           sessions, \*  
           msgs,     \*
           lmsg,     \* from ALOMeshNetwork
+          sync,     \* sync[local]L local \in nodes flag to synchronize state[local]
           state     (* state[local][n]: local, n \in nodes -- local CvRDT object 
                         .seq -- value of Vector Clock
                         .value -- any CvRDT value 
                     *)
 
-vars == <<discovery, sessions, msgs, lmsg, state>>
+vars == <<discovery, sessions, msgs, lmsg, sync, state>>
 
 Network == INSTANCE ALOMeshNetwork
 
@@ -29,16 +30,17 @@ MessageTypes == {"ADV", "REQ", "RESP"}
 
 SequenceNumber == 0..maxSeq
 
-Advertisement == UNION {[tag: {tag}, type: {"ADV"}, body: [s -> SequenceNumber]]: s \in SUBSET nodes}
+Advertisement == UNION {[tag: {ctag}, type: {"ADV"}, body: [s -> SequenceNumber]]: s \in SUBSET nodes}
 
-Request == [tag: {tag}, type: {"REQ"}, body: SUBSET nodes]
+Request == [tag: {ctag}, type: {"REQ"}, body: SUBSET nodes]
 
-Response ==  UNION {[tag: {tag}, type: {"RESP"}, body: [s -> [seq: SequenceNumber, value: values]]]: s \in SUBSET nodes}
+Response ==  UNION {[tag: {ctag}, type: {"RESP"}, body: [s -> [seq: SequenceNumber, value: values]]]: s \in SUBSET nodes}
 
 Message == Advertisement \cup Request \cup Response
 
 
 TypeOK == 
+    /\ \A f \in sync: f \in BOOLEAN 
     /\ \A n \in nodes: \E subset \in SUBSET nodes: 
                         state[n] \in [subset -> [seq: SequenceNumber, value: values]]
     /\ \A src, dst \in nodes: 
@@ -46,7 +48,9 @@ TypeOK ==
         /\ \A i \in 1..Len(msgs[src][dst]): msgs[src][dst][i] \in Message
 
 
-Init == state = [local \in nodes |-> [l \in {local} |->  [seq |-> 0, value |-> {}]]]
+Init == 
+    /\ sync = [local \in nodes |-> FALSE]
+    /\ state = [local \in nodes |-> [l \in {local} |->  [seq |-> 0, value |-> {}]]]
 
 
 Max(a, b) == IF a > b 
@@ -63,43 +67,42 @@ Prepare(local, incoming) ==
 
 Set(local, incoming) == Prepare(Get(local), Get(incoming))
 
-Update(local, value) ==
-    LET newState == [[state EXCEPT ![local][local].seq = @ + 1] 
-                            EXCEPT ![local][local].value = value] IN
-    /\ Network!Broadcast(local, [tag |-> tag, type |-> "ADV", body |-> Get(newState[local])])
-    /\ state' = newState
-    /\ UNCHANGED lmsg
+SendAdvertisement(local) ==
+    /\ sync[local] = TRUE
+    /\ Network!Broadcast(local, [tag |-> ctag, type |-> "ADV", body |-> Get(state[local])])
+    /\ sync' = [sync EXCEPT ![local] = FALSE] 
+    /\ UNCHANGED <<discovery, sessions, state, lmsg>>
 
 RecieveAdvertisement(dst, src, msg) ==
     LET req == Prepare(Get(state[dst]), msg.body) IN
     IF req # {}
     THEN 
-        /\ Network!Send(dst, src, [tag |-> tag, type |-> "REQ", body |-> req])
+        /\ Network!Send(dst, src, [tag |-> ctag, type |-> "REQ", body |-> req])
         /\ UNCHANGED state
     ELSE UNCHANGED <<discovery, sessions, state, msgs>>
 
 RecieveRequest(dst, src, msg) ==
     LET resp == [n \in msg.body |-> state[dst][n]] IN
-    /\ Network!Send(src, dst, [tag |-> tag, type |-> "RESP", body |-> resp])
+    /\ Network!Send(src, dst, [tag |-> ctag, type |-> "RESP", body |-> resp])
     /\ UNCHANGED state
 
 RecieveResponse(dst, src, msg) ==
     LET affected == Set(state[dst], msg.body) IN
     IF affected # {}
     THEN 
-        LET newState == [state EXCEPT ![dst] = 
-        [n \in nodes |-> 
-                IF n \in affected
-                THEN msg.body[n]
-                ELSE state[dst][n]
-        ]] IN
-        /\ state' = newState
-        /\ Network!Broadcast(dst, [tag |-> tag, type |-> "ADV", body |-> newState])
+        /\ state' = [state EXCEPT ![dst] = 
+                    [n \in nodes |-> 
+                            IF n \in affected
+                            THEN msg.body[n]
+                            ELSE state[dst][n]
+                    ]]
+        /\ Network!Broadcast(dst, [tag |-> ctag, type |-> "ADV", body |-> state'])
     ELSE UNCHANGED <<discovery, sessions, state, msgs>>
 
 Recieve(dst, src) ==
     /\ lmsg[dst][src] # {}
     /\ \E msg \in lmsg[dst][src]:
+        /\ msg.tag = ctag
         /\ lmsg' = [lmsg EXCEPT ![dst][src] = @ \ {msg}]
         /\ CASE msg.type = "ADV" -> RecieveAdvertisement(dst, src, msg)
              [] msg.type = "REQ" -> RecieveRequest(dst, src, msg)

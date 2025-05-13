@@ -8,18 +8,21 @@ CONSTANTS nodes, \* Set of all nodes participating in communication
           discTag \* discState tag
 
 VARIABLES discovery,\*  
-          sessions, \*  from Connector
+          sessions, \*  
           msgs,     \*
           lmsg,     \* 
           linkState,
-          discState     
+          discState,
+          linkSync,
+          discSync     
 
+discVars == <<discSync, discState>>
+linkVars == <<linkSync, linkState>>
+vars == <<discovery, sessions, msgs, lmsg, linkVars, discVars>>
 
-vars == <<discovery, sessions, msgs, lmsg, linkState, discState>>
+LinkTable == INSTANCE DeltaCRDT WITH ctag <- linkTag, sync <- linkSync, state <- linkState
 
-LinkTable == INSTANCE DeltaCRDT WITH tag <- linkTag, state <- linkState
-
-DiscTable == INSTANCE DeltaCRDT WITH tag <- discTag, state <- discState
+DiscTable == INSTANCE DeltaCRDT WITH ctag <- discTag, sync <- discSync, state <- discState
 
 Connector == INSTANCE FullConnector
 
@@ -32,22 +35,59 @@ Init ==
     /\ Connector!Init
 
 
+NewPeer(local, new) ==
+    /\ discSync' = [discSync EXCEPT ![local] = TRUE]
+    /\ discState' = [[discState EXCEPT ![local][local].seq = @ + 1] 
+                                EXCEPT ![local][local].value = @ \cup {new}]
+    /\ Network!NewPeer(local, new)
+    /\ UNCHANGED <<lmsg, msgs, linkVars>>
+
+OpenSession(n, k) == 
+    /\ Connector!Connect(n, k)
+    /\ Network!OpenSession(n, k)
+    /\ linkSync' = [[linkSync EXCEPT ![n] = TRUE] EXCEPT ![k] = TRUE]
+    /\ discSync' = [[discSync EXCEPT ![n] = TRUE] EXCEPT ![k] = TRUE] \* Should sync all if we have new session
+    /\ linkState' = [[[[linkState EXCEPT ![n][n].seq = @ + 1] 
+                                    EXCEPT ![n][n].value = @ \cup {k}]
+                                    EXCEPT ![k][k].seq = @ + 1]
+                                    EXCEPT ![k][k].value = @ \cup {n}]
+    /\ UNCHANGED <<lmsg, msgs, discState>>
+
+
+Deliver(n,k) == 
+    /\ Network!Deliver(n,k) 
+    /\ UNCHANGED <<linkVars, discVars>>
+
+    
+Recieve(n, k) == 
+    \/  /\ DiscTable!Recieve(n, k)
+        /\ UNCHANGED <<discSync, linkVars>>
+    \/  /\ LinkTable!Recieve(n, k)
+        /\ UNCHANGED <<linkSync, discVars>>
+
+SendAdvertisement(n) ==
+    \/ DiscTable!SendAdvertisement(n) /\ UNCHANGED linkVars
+    \/  LinkTable!SendAdvertisement(n) /\ UNCHANGED discVars
+
 Next == 
     \E n, k \in nodes: 
-    \/  Network!Deliver(n,k)
-    \/  /\ Network!NewPeer(n, k)
-        /\ DiscTable!Update(n, discState[n][n].value \cup {k})
-        /\ UNCHANGED <<linkState>>
-    \/  /\ Connector!Connect(n, k)
-        /\ Network!OpenSession(n, k)
-        /\ LinkTable!Update(n, linkState[n][n].value \cup {k})
-        /\ UNCHANGED <<discState>>
-    \/  /\ LinkTable!Recieve(n, k)
-    \/  /\ DiscTable!Recieve(n, k)
+    \/  Deliver(n, k)
+    \/  Recieve(n, k)
+    \/  NewPeer(n, k)
+    \/  OpenSession(n, k)
+    \/  SendAdvertisement(n)
 
 
+Fairness == \A n, k \in nodes: 
+            /\ SF_vars(Deliver(n, k))
+            /\ SF_vars(Recieve(n, k))  
 
-Spec == Init /\ [] [Next]_vars
+
+Convergence == \A n,k \in nodes: 
+                           /\ linkState[n] = linkState[k]
+                           /\ discState[n] = discState[k]
+
+Spec == Init /\ [][Next]_vars /\ Fairness
 
 \* Symmetry == Permutations(nodes)
 ====
