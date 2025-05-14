@@ -34,14 +34,16 @@ OpenSession(src, dst) ==
     /\ ~(dst \in sessions[src])
     /\ ~(src \in sessions[dst])
     /\ dst \in discovery[src] \* other may not be true
-    /\ sessions' = [[sessions EXCEPT ![src] = @ \cup {dst}] EXCEPT ![dst] = @ \cup {src}] 
+    /\ sessions' = [sessions EXCEPT ![src] = @ \cup {dst},
+                                    ![dst] = @ \cup {src}] 
     /\ UNCHANGED discovery
 
 CloseSession(src, dst) ==
     /\ src # dst
     /\ dst \in sessions[src]
     /\ src \in sessions[dst]
-    /\ sessions' = [[sessions EXCEPT ![src] = @ \ {dst}] EXCEPT ![dst] = @ \ {src}] 
+    /\ sessions' = [sessions EXCEPT ![src] = @ \ {dst},
+                                    ![dst] = @ \ {src}] 
     /\ UNCHANGED discovery
 
 ====

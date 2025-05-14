@@ -62,15 +62,15 @@ Init ==
 
 
 Max(a, b) == IF a > b 
-              THEN a 
-              ELSE b
+             THEN a 
+             ELSE b
 
 Get(data) == [n \in DOMAIN data |-> data[n].seq]
 
 Prepare(local, incoming) == 
-    LET new == (DOMAIN incoming) \ (DOMAIN local) IN
-    LET intersection == (DOMAIN incoming \cap DOMAIN local) IN
-    LET updated == {k \in intersection: Max(local[k], incoming[k]) # local[k]} IN
+    LET new == (DOMAIN incoming) \ (DOMAIN local)
+        intersection == (DOMAIN incoming \cap DOMAIN local)
+        updated == {k \in intersection: Max(local[k], incoming[k]) # local[k]} IN
     new \cup updated
 
 Set(local, incoming) == Prepare(Get(local), Get(incoming))
