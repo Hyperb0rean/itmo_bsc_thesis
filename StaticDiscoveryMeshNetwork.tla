@@ -1,4 +1,4 @@
----- MODULE MeshNetwork ----
+---- MODULE StaticDiscoveryMeshNetwork ----
 EXTENDS TLC, Sequences
 
 CONSTANT nodes \* Set of all nodes participating in communication
@@ -17,22 +17,14 @@ TypeOK ==
 -----------------------------------------------------------------------------
 
 Init == 
-    /\ discovery = [n \in nodes |-> {}]
+    /\ discovery = [n \in nodes |-> nodes \ {n}] \* Full mesh discovery
     /\ sessions = [n \in nodes |-> {}]
 
 
-NewPeer(src, new) == 
-    /\ src # new
-    /\ ~(new \in discovery[src])
-    /\ discovery' = [discovery EXCEPT ![src] = @ \cup {new}]
-    /\ UNCHANGED sessions
+(*Discovery changing is not supported*)
+NewPeer(src, new) == UNCHANGED <<discovery, sessions>>
 
-LostPeer(src, lost) == 
-    /\ discovery[src] # {}
-    /\ discovery' = [discovery EXCEPT ![src] = @ \ {lost}]
-    /\ UNCHANGED sessions
-
------------------------------------------------------------------------------
+LostPeer(src, lost) == UNCHANGED <<discovery, sessions>>
 
 OpenSession(src, dst) ==
     /\ src # dst

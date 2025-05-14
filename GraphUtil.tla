@@ -5,6 +5,8 @@ CONSTANT nodes
 
 VARIABLES edges
 
+-----------------------------------------------------------------------------
+
 ExistEdge(a, b) ==
      a \in edges[b] /\ b \in edges[a]
 

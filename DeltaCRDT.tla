@@ -11,8 +11,8 @@ CONSTANTS nodes, \* Set of all nodes participating in communication
 
 
 VARIABLES discovery,\*  
-          sessions, \*  
-          msgs,     \* from ALOMeshNetwork
+          sessions, \*  from MeshNetwork
+          msgs,     \* msg[src][dst] -- FIFO channel between src and dst
           sync,     \* sync[local]L local \in nodes flag to synchronize state[local]
           state     (* state[local][n]: local, n \in nodes -- local CvRDT object 
                         .seq -- value of Vector Clock
@@ -21,7 +21,11 @@ VARIABLES discovery,\*
 
 vars == <<discovery, sessions, msgs, sync, state>>
 
-Network == INSTANCE ALOMeshNetwork
+-----------------------------------------------------------------------------
+
+Network == INSTANCE MeshNetwork
+
+-----------------------------------------------------------------------------
 
 MessageTypes == {"ADV", "REQ", "RESP"}
 
@@ -55,29 +59,43 @@ TypeOK ==
         \/ src = dst
         \/ \A i \in 1..Len(msgs[src][dst]): Message(msgs[src][dst][i])
 
+-----------------------------------------------------------------------------
 
 Init == 
+    /\ msgs = [src \in nodes |-> [dst \in (nodes \ {src}) |-> <<>>]]
     /\ sync = [local \in nodes |-> FALSE]
     /\ state = [local \in nodes |-> [l \in {local} |->  [seq |-> 0, value |-> {}]]]
 
+-----------------------------------------------------------------------------
 
-Max(a, b) == IF a > b 
-             THEN a 
-             ELSE b
+LOCAL Contains(s, e) ==
+    /\ s # <<>>
+    /\ \E i \in 1..Len(s) : s[i] = e
+
+Broadcast(src, msg) ==
+    \/  sessions[src] = {} /\ UNCHANGED msgs
+    \/  /\ msgs' = [msgs EXCEPT ![src] = 
+            [dst \in (nodes \ {src}) |-> 
+                IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
+                THEN Append(msgs[src][dst], msg)
+                ELSE msgs[src][dst]]]
+        /\ UNCHANGED <<discovery, sessions>>
 
 Get(data) == [n \in DOMAIN data |-> data[n].seq]
 
 Prepare(local, incoming) == 
     LET new == (DOMAIN incoming) \ (DOMAIN local)
         intersection == (DOMAIN incoming \cap DOMAIN local)
-        updated == {k \in intersection: Max(local[k], incoming[k]) # local[k]} IN
+        updated == {k \in intersection: local[k] < incoming[k]} IN
     new \cup updated
 
-Set(local, incoming) == Prepare(Get(local), Get(incoming))
+Merge(local, incoming) == Prepare(Get(local), Get(incoming))
+
+-----------------------------------------------------------------------------
 
 SendAdvertisement(local) ==
     /\ sync[local] = TRUE
-    /\ Network!Broadcast(local, [type |-> "ADV", body |-> Get(state[local])])
+    /\ Broadcast(local, [type |-> "ADV", body |-> Get(state[local])])
     /\ sync' = [sync EXCEPT ![local] = FALSE] 
     /\ UNCHANGED <<discovery, sessions, state>>
 
@@ -97,7 +115,7 @@ RecieveRequest(dst, src, msg, newMsgs) ==
 
 
 RecieveResponse(dst, src, msg, newMsgs) ==
-    LET affected == Set(state[dst], msg.body) IN
+    LET affected == Merge(state[dst], msg.body) IN
     /\ IF affected # {}
         THEN 
             /\ state' = [state EXCEPT ![dst] = 

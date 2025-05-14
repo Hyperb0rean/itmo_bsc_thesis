@@ -8,12 +8,16 @@ VARIABLES discovery, \*  specifies which nodes could communicate
 
 vars == << discovery, sessions >>
 
+-----------------------------------------------------------------------------
+
 Network == INSTANCE MeshNetwork
+
+-----------------------------------------------------------------------------
 
 Init == TRUE
 
-Connect(src, dst) == TRUE
+CouldConnect(src, dst) == TRUE
 
-Drop(src, dst) == FALSE
+CouldDrop(src, dst) == TRUE
 
 ====
