@@ -72,7 +72,7 @@ LOCAL Contains(s, e) ==
     /\ s # <<>>
     /\ \E i \in 1..Len(s) : s[i] = e
 
-Broadcast(src, msg) ==
+LOCAL Broadcast(src, msg) ==
     \/  sessions[src] = {} /\ UNCHANGED msgs
     \/  /\ msgs' = [msgs EXCEPT ![src] = 
             [dst \in (nodes \ {src}) |-> 
@@ -81,15 +81,15 @@ Broadcast(src, msg) ==
                 ELSE msgs[src][dst]]]
         /\ UNCHANGED <<discovery, sessions>>
 
-Get(data) == [n \in DOMAIN data |-> data[n].seq]
+LOCAL Get(data) == [n \in DOMAIN data |-> data[n].seq]
 
-Prepare(local, incoming) == 
+LOCAL Prepare(local, incoming) == 
     LET new == (DOMAIN incoming) \ (DOMAIN local)
         intersection == (DOMAIN incoming \cap DOMAIN local)
         updated == {k \in intersection: local[k] < incoming[k]} IN
     new \cup updated
 
-Merge(local, incoming) == Prepare(Get(local), Get(incoming))
+LOCAL Merge(local, incoming) == Prepare(Get(local), Get(incoming))
 
 -----------------------------------------------------------------------------
 
@@ -99,7 +99,7 @@ SendAdvertisement(local) ==
     /\ sync' = [sync EXCEPT ![local] = FALSE] 
     /\ UNCHANGED <<discovery, sessions, state>>
 
-RecieveAdvertisement(dst, src, msg, newMsgs) ==
+LOCAL RecieveAdvertisement(dst, src, msg, newMsgs) ==
     LET req == Prepare(Get(state[dst]), msg.body) IN
     /\  IF req # {}
         THEN msgs' = [newMsgs EXCEPT ![dst][src] 
@@ -107,14 +107,14 @@ RecieveAdvertisement(dst, src, msg, newMsgs) ==
         ELSE msgs' = newMsgs 
     /\ UNCHANGED <<discovery, sessions, state, sync>>
 
-RecieveRequest(dst, src, msg, newMsgs) ==
+LOCAL RecieveRequest(dst, src, msg, newMsgs) ==
     LET resp == [n \in msg.body |-> state[dst][n]] IN
     /\ msgs' = [newMsgs EXCEPT ![dst][src] 
                         = Append(@, [type |-> "RESP", body |-> resp])]
     /\ UNCHANGED <<discovery, sessions, state, sync>>
 
 
-RecieveResponse(dst, src, msg, newMsgs) ==
+LOCAL RecieveResponse(dst, src, msg, newMsgs) ==
     LET affected == Merge(state[dst], msg.body) IN
     /\ IF affected # {}
         THEN 

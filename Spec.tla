@@ -41,24 +41,24 @@ NewPeer(local, new) ==
     /\ Network!NewPeer(local, new)
     /\ UNCHANGED <<msgs, nodeVars>>
 
-OpenSession(n, k) == 
-    /\ Connector!CouldConnect(n, k)
-    /\ Network!OpenSession(n, k)
-    /\ sync' = [sync EXCEPT ![n] = TRUE,
-                            ![k] = TRUE]
-    /\ state' = [state EXCEPT   ![n][n].seq = @ + 1, 
-                                ![n][n].value = @ \cup {k},
-                                ![k][k].seq = @ + 1,
-                                ![k][k].value = @ \cup {n}]
+OpenSession(src, dst) == 
+    /\ Connector!CouldConnect(src, dst)
+    /\ Network!OpenSession(src, dst)
+    /\ sync' = [sync EXCEPT ![src] = TRUE,
+                            ![dst] = TRUE]
+    /\ state' = [state EXCEPT   ![src][src].seq = @ + 1, 
+                                ![src][src].value = @ \cup {dst},
+                                ![dst][dst].seq = @ + 1,
+                                ![dst][dst].value = @ \cup {src}]
     /\ UNCHANGED msgs
 
     
-Recieve(n, k) == 
-    Synchronizator!Recieve(n, k)
+Recieve(dst, src) == 
+    Synchronizator!Recieve(dst, src)
 
 
-SendAdvertisement(n) ==
-    Synchronizator!SendAdvertisement(n)
+SendAdvertisement(src) ==
+    Synchronizator!SendAdvertisement(src)
 
 Terminated == 
     /\ \A n \in nodes: sync[n] = FALSE
