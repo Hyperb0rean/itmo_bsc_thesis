@@ -1,4 +1,10 @@
 ---- MODULE MeshNetwork ----
+
+(*
+Current module specifies the mesh-network abstraction layer. 
+Basic implementation assumes dynamic changes in both discovery and sessions sets.
+*)
+
 EXTENDS TLC, Sequences
 
 CONSTANT nodes \* Set of all nodes participating in communication
@@ -20,6 +26,12 @@ Init ==
     /\ discovery = [n \in nodes |-> {}]
     /\ sessions = [n \in nodes |-> {}]
 
+-----------------------------------------------------------------------------
+
+(*
+Actions to model node discovery behaviour.
+*)
+
 
 NewPeer(src, new) == 
     /\ src # new
@@ -33,6 +45,12 @@ LostPeer(src, lost) ==
     /\ UNCHANGED sessions
 
 -----------------------------------------------------------------------------
+
+(*
+Actions to model node connection behaviour.
+In this model assumed, that all links are kind of graph edges, 
+other properties (e.g. link initiator, RTT, bandwidth) are omitted.
+*)
 
 OpenSession(src, dst) ==
     /\ src # dst

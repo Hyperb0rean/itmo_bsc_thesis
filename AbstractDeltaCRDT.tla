@@ -1,4 +1,4 @@
----- MODULE DeltaCRDT ----
+---- MODULE AbstractDeltaCRDT ----
 
 (*
 This module describes developed \delta-CRDT protocol and uses
@@ -6,7 +6,7 @@ MeshNetwork abstractions discussed previously
 Using CvRDT (state CRDT) because network has only "at-least-once" guarantee
 *)
 
-EXTENDS TLC, Naturals, Sequences, FiniteSets
+EXTENDS TLC, Naturals, FiniteSets
 
 CONSTANTS nodes, \* Set of all nodes participating in communication
           values \* Set of all valid values
@@ -14,8 +14,8 @@ CONSTANTS nodes, \* Set of all nodes participating in communication
 
 VARIABLES discovery,\*  
           sessions, \*  from MeshNetwork
-          msgs,     \* msg[src][dst] -- FIFO channel between src and dst
-          sync,     \* sync[local]L local \in nodes flag to synchronize state[local]
+          msgs,     \* msgs -- set of all messages in network, destination is described by message
+          sync,     \* sync[local] local \in nodes flag to synchronize state[local]
           state     (* state[local][n]: local, n \in nodes -- local CvRDT object 
                         .seq -- value of Vector Clock
                         .value -- any CvRDT value 
@@ -48,10 +48,13 @@ Response(msg) ==
         /\ msg.body[i].value \in values
 
 
-Message(msg) == 
-    \/ Advertisement(msg)
-    \/ Request(msg)
-    \/ Response(msg)
+Message(msg) ==     
+    /\ msg.to \in nodes
+    /\ msg.from \in nodes
+    /\  \/ Advertisement(msg)
+        \/ Request(msg)
+        \/ Response(msg)
+    
 
 TypeOK == 
     /\ sync \in [nodes -> BOOLEAN]
@@ -59,12 +62,12 @@ TypeOK ==
                         state[n] \in [subset -> [seq: Nat, value: values]]
     /\ \A src, dst \in nodes: 
         \/ src = dst
-        \/ \A i \in 1..Len(msgs[src][dst]): Message(msgs[src][dst][i])
+        \/ \A msg \in msgs: Message(msg)
 
 -----------------------------------------------------------------------------
 
 Init == 
-    /\ msgs = [src \in nodes |-> [dst \in (nodes \ {src}) |-> <<>>]]
+    /\ msgs = {}
     /\ state = [local \in nodes |-> [l \in {local} |->  [seq |-> 0, value |-> {}]]]
 
 -----------------------------------------------------------------------------
@@ -72,15 +75,6 @@ Init ==
 LOCAL Contains(s, e) ==
     /\ s # <<>>
     /\ \E i \in 1..Len(s) : s[i] = e
-
-LOCAL Broadcast(src, msg) ==
-    \/  sessions[src] = {} /\ UNCHANGED msgs
-    \/  /\ msgs' = [msgs EXCEPT ![src] = 
-            [dst \in (nodes \ {src}) |-> 
-                IF (dst \in sessions[src] /\ ~Contains(msgs[src][dst], msg))
-                THEN Append(msgs[src][dst], msg)
-                ELSE msgs[src][dst]]]
-        /\ UNCHANGED <<discovery, sessions>>
 
 -----------------------------------------------------------------------------
 
@@ -100,23 +94,31 @@ LOCAL Merge(local, incoming) == Prepare(Get(local), Get(incoming))
 -----------------------------------------------------------------------------
 
 SendAdvertisement(local) ==
+    LET vecClock == Get(state[local]) IN
     /\ sync[local] = TRUE
-    /\ Broadcast(local, [type |-> "ADV", body |-> Get(state[local])])
+    /\ msgs' = msgs \cup {[from |-> local,
+                           to |-> other, 
+                           type |-> "ADV",
+                           body |-> vecClock]: other \in sessions[local]}
     /\ sync' = [sync EXCEPT ![local] = FALSE] 
     /\ UNCHANGED <<discovery, sessions, state>>
 
 LOCAL RecieveAdvertisement(dst, src, msg, newMsgs) ==
     LET req == Prepare(Get(state[dst]), msg.body) IN
     /\  IF req # {}
-        THEN msgs' = [newMsgs EXCEPT ![dst][src] 
-                            = Append(@, [type |-> "REQ", body |-> req])]
+        THEN msgs' = newMsgs \cup {[from |-> dst, 
+                                    to |-> src, 
+                                    type |-> "REQ",
+                                    body |-> req]}
         ELSE msgs' = newMsgs 
     /\ UNCHANGED <<discovery, sessions, state, sync>>
 
 LOCAL RecieveRequest(dst, src, msg, newMsgs) ==
     LET resp == [n \in msg.body |-> state[dst][n]] IN
-    /\ msgs' = [newMsgs EXCEPT ![dst][src] 
-                        = Append(@, [type |-> "RESP", body |-> resp])]
+    /\ msgs' = newMsgs \cup {[from |-> dst,
+                              to |-> src, 
+                              type |-> "RESP",
+                              body |-> resp]}
     /\ UNCHANGED <<discovery, sessions, state, sync>>
 
 
@@ -134,14 +136,15 @@ LOCAL RecieveResponse(dst, src, msg, newMsgs) ==
         ELSE UNCHANGED <<discovery, sessions, state, sync>>
     /\ msgs' = newMsgs
 
+
 Recieve(dst, src) ==
-    LET msg == Head(msgs[src][dst]) 
-        newMsgs == [msgs EXCEPT ![src][dst] = Tail(@)] IN
+    \E msg \in msgs: 
     /\ dst \in sessions[src]
-    /\ Len(msgs[src][dst]) > 0
-    /\ CASE msg.type ="ADV" -> RecieveAdvertisement(dst, src, msg, newMsgs)
-        [] msg.type = "REQ" -> RecieveRequest(dst, src, msg, newMsgs)
-        [] msg.type = "RESP"-> RecieveResponse(dst, src, msg, newMsgs)
+    /\ msg.from = src
+    /\ msg.to = dst
+    /\ CASE msg.type ="ADV" -> RecieveAdvertisement(dst, src, msg,  msgs \ {msg})
+        [] msg.type = "REQ" -> RecieveRequest(dst, src, msg,  msgs \ {msg})
+        [] msg.type = "RESP"-> RecieveResponse(dst, src, msg,  msgs \ {msg})
         [] OTHER            -> UNCHANGED <<discovery, sessions, state>>
 
 ====

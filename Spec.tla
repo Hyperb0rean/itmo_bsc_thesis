@@ -1,7 +1,9 @@
 ---- MODULE Spec ----
 EXTENDS TLC, Naturals, Sequences
 
-CONSTANTS nodes \* Set of all nodes participating in communication
+CONSTANTS nodes, \* Set of all nodes participating in communication
+          maxSeq
+
 
 VARIABLES discovery,\*  
           sessions, \* from MeshNetwork
@@ -15,7 +17,7 @@ subsets == SUBSET nodes
 
 -----------------------------------------------------------------------------
 
-Synchronizator == INSTANCE DeltaCRDT WITH values <- subsets
+Synchronizator == INSTANCE AbstractDeltaCRDT WITH values <- subsets
 
 Connector == INSTANCE FullConnector
 
@@ -33,6 +35,7 @@ TypeOK ==
 
 Init == 
     /\ Network!Init
+    /\ sync = [local \in nodes |-> FALSE]
     /\ Synchronizator!Init
     /\ Connector!Init
 
@@ -80,6 +83,8 @@ Fairness == \A n, k \in nodes:
             /\ WF_vars(SendAdvertisement(n)) \* If node <>eventually []always should sync its state it should <>eventually do it
             /\ SF_vars(Recieve(n, k))  \* If []always <>eventually could recieve it []always <>eventually will do it
 
+-----------------------------------------------------------------------------
+
 EventualConsistency == 
     LET connected == Graph!Connected IN
     <> \A n,k \in nodes: connected[n, k] => state[n] = state[k]
@@ -87,6 +92,16 @@ EventualConsistency ==
 ConnectionCompletness ==
     \A n,k \in nodes:  <>[](Connector!CouldConnect(n, k) /\ k \in discovery[n])
                          =>  <>[]Graph!ExistEdge(n, k) 
+
+SequenceMonotonicity ==
+    [][\A n \in nodes:
+       \A k \in DOMAIN state[n]:
+        state'[n][k].seq >= state[n][k].seq]_vars
+
+SequenceInvariant ==
+    \A n \in nodes:
+       \A k \in DOMAIN state[n]:
+        state[n][k].seq <= maxSeq
 
 -----------------------------------------------------------------------------
 
