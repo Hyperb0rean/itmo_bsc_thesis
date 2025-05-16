@@ -1,10 +1,10 @@
 ---- MODULE DeltaCRDT ----
 
 (*
-This module describes developed \delta-CRDT protocol and uses
-MeshNetwork abstractions discussed previously
-Using CvRDT (state CRDT) because network has only "at-least-once" guarantee
-*)
+    This module describes developed \delta-CRDT protocol and uses
+    MeshNetwork abstractions discussed previously
+    Using CvRDT (state CRDT) because network has only "at-least-once" guarantee
+                                                                                *)
 
 EXTENDS TLC, Naturals, Sequences, FiniteSets
 
@@ -16,10 +16,11 @@ VARIABLES discovery,\*
           sessions, \*  from MeshNetwork
           msgs,     \* msg[src][dst] -- FIFO channel between src and dst
           sync,     \* sync[local]L local \in nodes flag to synchronize state[local]
-          state     (* state[local][n]: local, n \in nodes -- local CvRDT object 
+          state     (* 
+                        state[local][n]: local, n \in nodes -- local CvRDT object 
                         .seq -- value of Vector Clock
                         .value -- any CvRDT value 
-                    *)
+                                                                                *)
 
 vars == <<discovery, sessions, msgs, sync, state>>
 
@@ -122,15 +123,15 @@ LOCAL RecieveRequest(dst, src, msg, newMsgs) ==
 
 LOCAL RecieveResponse(dst, src, msg, newMsgs) ==
     LET affected == Merge(state[dst], msg.body) IN
-    /\ IF affected # {}
-        THEN /\ state' = [state EXCEPT ![dst] = 
+    /\  IF affected # {}
+        THEN    /\ state' = [state EXCEPT ![dst] = 
                         [n \in (affected \cup DOMAIN state[dst]) |-> 
                                 IF n \in affected
                                 THEN msg.body[n]
                                 ELSE state[dst][n]
                         ]]
-             /\ sync' = [sync EXCEPT ![dst] = TRUE]
-             /\ UNCHANGED <<discovery, sessions>>
+                /\ sync' = [sync EXCEPT ![dst] = TRUE]
+                /\ UNCHANGED <<discovery, sessions>>
         ELSE UNCHANGED <<discovery, sessions, state, sync>>
     /\ msgs' = newMsgs
 

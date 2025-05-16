@@ -1,9 +1,9 @@
 ---- MODULE MeshNetwork ----
 
 (*
-Current module specifies the mesh-network abstraction layer. 
-Basic implementation assumes dynamic changes in both discovery and sessions sets.
-*)
+    Current module specifies the mesh-network abstraction layer. 
+    Basic implementation assumes dynamic changes in both discovery and sessions sets.
+                                                                                        *)
 
 EXTENDS TLC, Sequences
 

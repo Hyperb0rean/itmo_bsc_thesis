@@ -1,11 +1,11 @@
 ---- MODULE StaticMeshNetwork ----
 EXTENDS TLC, Sequences
 
-\*********************************************************************************
-\*   Current module specifies the staticly configured mesh-network abstraction layer. 
-\*   All links and visibility should be declared in Init action and will not change.
-\*   Made for faster model checking of specific scenarios.
-\*********************************************************************************
+(*
+   Current module specifies the staticly configured mesh-network abstraction layer. 
+   All links and visibility should be declared in Init action and will not change.
+   Made for faster model checking of specific scenarios.
+                                                                                    *)
 
 
 CONSTANT nodes \* Set of all nodes participating in communication
@@ -18,8 +18,10 @@ VARIABLES discovery, \*  specifies which nodes could communicate
 TypeOK == 
     /\ \A n \in nodes: discovery[n] \subseteq nodes \ {n} \* Nodes should not discover themselves
     /\ \A n \in nodes: sessions[n] \subseteq nodes \ {n} \*  Nodes should not connect to themselves
-    \* Not just subset of discovery 
-    \* because it is possible to have session but not to have discovery 
+    (* 
+       Not just subset of discovery 
+       because it is possible to have session but not to have discovery 
+                                                                        *)
 
 -----------------------------------------------------------------------------
 
@@ -28,12 +30,12 @@ Init ==
     /\ sessions = [n \in nodes |-> nodes \ {n}] \* Full mesh sessions
 
 \*Discovery changing is omitted
-NewPeer(src, new) == UNCHANGED <<discovery, sessions>>
+NewPeer(src, new) == FALSE
 
-LostPeer(src, lost) == UNCHANGED <<discovery, sessions>>
+LostPeer(src, lost) == FALSE
 
 \*Connection changing is omitted
-OpenSession(src, dst) == UNCHANGED <<discovery, sessions>>
+OpenSession(src, dst) == FALSE
 
-CloseSession(src, dst) == UNCHANGED <<discovery, sessions>>
+CloseSession(src, dst) == FALSE
 ====

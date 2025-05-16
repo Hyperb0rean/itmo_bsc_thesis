@@ -21,7 +21,7 @@ Synchronizator == INSTANCE AbstractDeltaCRDT WITH values <- subsets
 
 Connector == INSTANCE FullConnector
 
-Network == INSTANCE MeshNetwork
+Network == INSTANCE StaticMeshNetwork
 
 Graph == INSTANCE GraphUtil WITH nodes <- nodes, edges <- sessions 
 
@@ -35,7 +35,7 @@ TypeOK ==
 
 Init == 
     /\ Network!Init
-    /\ sync = [local \in nodes |-> FALSE]
+    /\ sync = [local \in nodes |-> TRUE]
     /\ Synchronizator!Init
     /\ Connector!Init
 
@@ -108,4 +108,6 @@ SequenceInvariant ==
 Spec == Init /\ [][Next]_vars /\ Fairness
 
 Symmetry == Permutations(nodes)
+
+LevelConstraint == TLCGet("level") < 5
 ====
